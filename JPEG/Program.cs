@@ -73,14 +73,14 @@ namespace JPEG
 
         private static void CompressYCbCrBlock(Matrix matrix, int x, int y, double[,] subMatrix, double[,] channelFreqs,
             byte[,] quantizedFreqs, byte[] quantizedBytes, byte[] allQuantizedBytes,
-            Func<Pixel, byte>[] selectorFuncs, int offset, int[,] qm)
+            Func<Pixel, byte>[] selectorFuncs, int offset)
         {
             var mSize = DCTSize * DCTSize;
             for (var yy = y; yy < y + DCTCbCrSize; yy += DCTSize)
                 for (var xx = x; xx < x + DCTCbCrSize; xx += DCTSize)
                 {
                     matrix.GetSubMatrix(yy, DCTSize, xx, DCTSize, ToY, subMatrix);
-                    CompressBlock(subMatrix, channelFreqs, quantizedFreqs, quantizedBytes, allQuantizedBytes, offset, qm);
+                    CompressBlock(subMatrix, channelFreqs, quantizedFreqs, quantizedBytes, allQuantizedBytes, offset);
                     offset += mSize;
                 }
 
@@ -88,17 +88,17 @@ namespace JPEG
             {
                 matrix.GetSubMatrixAndCompress(y, DCTCbCrSize, x, DCTCbCrSize,
                     selector, subMatrix);
-                CompressBlock(subMatrix, channelFreqs, quantizedFreqs, quantizedBytes, allQuantizedBytes, offset, qm);
+                CompressBlock(subMatrix, channelFreqs, quantizedFreqs, quantizedBytes, allQuantizedBytes, offset);
                 offset += mSize;
             }
         }
 
         private static void CompressBlock(double[,] subMatrix, double[,] channelFreqs,
-            byte[,] quantizedFreqs, byte[] quantizedBytes, byte[] allQuantizedBytes, int offset, int[,] quantizationMatrix)
+            byte[,] quantizedFreqs, byte[] quantizedBytes, byte[] allQuantizedBytes, int offset)
         {
             ShiftMatrixValues(subMatrix , - 128);
             DCT.DCT2D(subMatrix, channelFreqs);
-            Quantize(channelFreqs, quantizationMatrix, quantizedFreqs);
+            channelFreqs.Quantize(quantizedFreqs);
             ZigZagScan(quantizedFreqs, quantizedBytes);
             Buffer.BlockCopy(quantizedBytes, 0, allQuantizedBytes, offset, DCTSize * DCTSize);
         }
@@ -118,15 +118,14 @@ namespace JPEG
                     offset += 6 * DCTSize * DCTSize;
                 }
 
-            var quantizationMatrix = GetQuantizationMatrix(quality);
+            Quantizers.Init(quality);
             var selectorFuncs = new Func<Pixel, byte>[] { p => p.Cb, p => p.Cr };
 
             Parallel.ForEach(indexes, () => new CompressStructures(), (index, state, s) =>
             {
                 var sf = selectorFuncs;
-                var qm = quantizationMatrix;
                 CompressYCbCrBlock(matrix, index.x, index.y, s.SubMatrix, s.ChannelFreqs, s.QuantizedFreqs,
-                    s.QuantizedBytes, allQuantizedBytes, sf, index.offset, qm);
+                    s.QuantizedBytes, allQuantizedBytes, sf, index.offset);
                 return s;
 
             }, f => { });
@@ -157,7 +156,7 @@ namespace JPEG
             var extendedcr = new double[DCTSize, DCTSize];
             var channels = new[] { cb, cr };
             var quantizedBytes = new byte[DCTSize * DCTSize];
-            var quantizationMatrix = GetQuantizationMatrix(image.Quality);
+            Quantizers.Init(image.Quality);
             var quantizedFreqs = new byte[DCTSize, DCTSize];
             var channelFreqs = new double[DCTSize, DCTSize];
 
@@ -171,7 +170,7 @@ namespace JPEG
                     {
                         allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
                         ZigZagUnScan(quantizedBytes, quantizedFreqs);
-                        DeQuantize(quantizedFreqs, quantizationMatrix, channelFreqs);
+                        quantizedFreqs.DeQuantize(channelFreqs);
                         var currentY = _y[i];
                         DCT.IDCT2D(channelFreqs, currentY);
                         ShiftMatrixValues(currentY, 128);
@@ -180,7 +179,7 @@ namespace JPEG
                     {
                         allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
                         ZigZagUnScan(quantizedBytes, quantizedFreqs);
-                        DeQuantize(quantizedFreqs, quantizationMatrix, channelFreqs);
+                        quantizedFreqs.DeQuantize(channelFreqs);
                         DCT.IDCT2D(channelFreqs, channel);
                         ShiftMatrixValues(channel, 128);
                     }
@@ -253,47 +252,5 @@ namespace JPEG
             output[6, 0] = quantizedBytes[21]; output[6, 1] = quantizedBytes[34]; output[6, 2] = quantizedBytes[37]; output[6, 3] = quantizedBytes[47]; output[6, 4] = quantizedBytes[50]; output[6, 5] = quantizedBytes[56]; output[6, 6] = quantizedBytes[59]; output[6, 7] = quantizedBytes[61];
             output[7, 0] = quantizedBytes[35]; output[7, 1] = quantizedBytes[36]; output[7, 2] = quantizedBytes[48]; output[7, 3] = quantizedBytes[49]; output[7, 4] = quantizedBytes[57]; output[7, 5] = quantizedBytes[58]; output[7, 6] = quantizedBytes[62]; output[7, 7] = quantizedBytes[63];
         }
-
-		private static void Quantize(double[,] channelFreqs, int[,] quantizationMatrix, byte[,] output)
-		{
-			for (var y = 0; y < channelFreqs.GetLength(0); y++)
-            for (var x = 0; x < channelFreqs.GetLength(1); x++)
-                output[y, x] = (byte) (channelFreqs[y, x] / quantizationMatrix[y, x]);
-		}
-
-		private static void DeQuantize(byte[,] quantizedBytes, int[,] quantizationMatrix, double[,] output)
-		{
-			for (var y = 0; y < quantizedBytes.GetLength(0); y++)
-            for (var x = 0; x < quantizedBytes.GetLength(1); x++)
-                output[y, x] =
-                    (sbyte) quantizedBytes[y, x] *
-                    quantizationMatrix[y, x]; //NOTE cast to sbyte not to loose negative numbers
-		}
-
-		private static int[,] GetQuantizationMatrix(int quality)
-		{
-			if(quality < 1 || quality > 99)
-				throw new ArgumentException("quality must be in [1,99] interval");
-
-			var multiplier = quality < 50 ? 5000 / quality : 200 - 2 * quality;
-
-			var result = new[,]
-			{
-				{16, 11, 10, 16, 24, 40, 51, 61},
-				{12, 12, 14, 19, 26, 58, 60, 55},
-				{14, 13, 16, 24, 40, 57, 69, 56},
-				{14, 17, 22, 29, 51, 87, 80, 62},
-				{18, 22, 37, 56, 68, 109, 103, 77},
-				{24, 35, 55, 64, 81, 104, 113, 92},
-				{49, 64, 78, 87, 103, 121, 120, 101},
-				{72, 92, 95, 98, 112, 100, 103, 99}
-			};
-
-			for (var y = 0; y < result.GetLength(0); y++)
-            for (var x = 0; x < result.GetLength(1); x++)
-                result[y, x] = (multiplier * result[y, x] + 50) / 100;
-
-            return result;
-		}
 	}
 }
