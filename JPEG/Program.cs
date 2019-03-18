@@ -107,8 +107,8 @@ namespace JPEG
         {
             var size = matrix.Height * matrix.Width;
             var allQuantizedBytes = new byte[size + 2 * size / (CbCrCompressCoef * CbCrCompressCoef)];
-            var offset = 0;
 
+            var offset = 0;
             var indexes =
                 new List<(int x, int y, int offset)>(matrix.Height / DCTCbCrSize * (matrix.Width / DCTCbCrSize));
             for (var y = 0; y < matrix.Height; y += DCTCbCrSize)
@@ -143,58 +143,70 @@ namespace JPEG
             };
         }
 
+        private static void UncompressBlock(byte[] allQuantizedBytes, byte[] quantizedBytes,
+            byte[,] quantizedFreqs, double[,] channelFreqs, double[,] channel, int offset)
+        {
+            Buffer.BlockCopy(allQuantizedBytes, offset, quantizedBytes, 0, DCTSize * DCTSize);
+            quantizedBytes.ZigZagUnScan(quantizedFreqs);
+            quantizedFreqs.DeQuantize(channelFreqs);
+            DCT.IDCT2D(channelFreqs, channel);
+            channel.ShiftMatrixValues(128);
+        }
+
+        private static void UncompressYCbCrBlock(int ySize, byte[] allQuantizedBytes, byte[] quantizedBytes,
+            byte[,] quantizedFreqs, double[,] channelFreqs, double[][,] yChannel, double[][,] cbcrChannels,
+            double[][,] extendedcbcrChannels, Matrix result, int y, int x, int offset)
+        {
+            for (var i = 0; i < ySize; i++)
+            {
+                UncompressBlock(allQuantizedBytes, quantizedBytes, quantizedFreqs, channelFreqs, yChannel[i], offset);
+                offset += DCTSize * DCTSize;
+            }
+
+            foreach (var channel in cbcrChannels)
+            {
+                UncompressBlock(allQuantizedBytes, quantizedBytes, quantizedFreqs, channelFreqs, channel, offset);
+                offset += DCTSize * DCTSize;
+            }
+
+            var j = 0;
+            for (var yy = 0; yy < DCTCbCrSize / DCTSize; yy++)
+            for (var xx = 0; xx < DCTCbCrSize / DCTSize; xx++)
+            {
+                for (var i = 0; i < 2; i++)
+                    cbcrChannels[i].ExtendMatrix(xx, yy, CbCrCompressCoef, DCTSize, extendedcbcrChannels[i]);
+                result.SetPixels(yChannel[j], extendedcbcrChannels[0], extendedcbcrChannels[1], PixelFormat.YCbCr, y + yy * DCTSize, x + xx * DCTSize);
+                j++;
+            }
+        }
+
         private static Matrix Uncompress(CompressedImage image)
         {
             const int ySize = DCTCbCrSize * DCTCbCrSize / (DCTSize * DCTSize);
 			var result = new Matrix(image.Height, image.Width);
-            var _y = new double[ySize][,];
-            for (var i = 0; i < ySize; i++)
-                _y[i] = new double[DCTSize, DCTSize];
-            var cb = new double[DCTSize, DCTSize];
-            var cr = new double[DCTSize, DCTSize];
-            var extendedcb = new double[DCTSize, DCTSize];
-            var extendedcr = new double[DCTSize, DCTSize];
-            var channels = new[] { cb, cr };
-            var quantizedBytes = new byte[DCTSize * DCTSize];
+            
             Quantizers.Init(image.Quality);
-            var quantizedFreqs = new byte[DCTSize, DCTSize];
-            var channelFreqs = new double[DCTSize, DCTSize];
 
-            using (var allQuantizedBytes =
-				new MemoryStream(HuffmanCodec.Decode(image.CompressedBytes, image.DecodeTable, image.BitsCount)))
-			{
-                for (var y = 0; y < image.Height; y += DCTCbCrSize)
-                for (var x = 0; x < image.Width; x += DCTCbCrSize)
-                {
-                    for (var i = 0; i < ySize; i++)
-                    {
-                        allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
-                        quantizedBytes.ZigZagUnScan(quantizedFreqs);
-                        quantizedFreqs.DeQuantize(channelFreqs);
-                        var currentY = _y[i];
-                        DCT.IDCT2D(channelFreqs, currentY);
-                        currentY.ShiftMatrixValues(128);
-                    }
-                    foreach (var channel in channels)
-                    {
-                        allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
-                        quantizedBytes.ZigZagUnScan(quantizedFreqs);
-                        quantizedFreqs.DeQuantize(channelFreqs);
-                        DCT.IDCT2D(channelFreqs, channel);
-                        channel.ShiftMatrixValues(128);
-                    }
-
-                    var j = 0;
-                    for (var yy = 0; yy < DCTCbCrSize / DCTSize; yy++)
-                    for (var xx = 0; xx < DCTCbCrSize / DCTSize; xx++)
-                    {
-                        cb.ExtendMatrix(xx, yy, CbCrCompressCoef, DCTSize, extendedcb);
-                        cr.ExtendMatrix(xx, yy, CbCrCompressCoef, DCTSize, extendedcr);
-                        result.SetPixels(_y[j], extendedcb, extendedcr, PixelFormat.YCbCr, y + yy * DCTSize, x + xx *DCTSize);
-                        j++;
-                    }
-                }
+            var offset = 0;
+            var indexes =
+                new List<(int x, int y, int offset)>(image.Height / DCTCbCrSize * (image.Width / DCTCbCrSize));
+            for (var y = 0; y < image.Height; y += DCTCbCrSize)
+            for (var x = 0; x < image.Width; x += DCTCbCrSize)
+            {
+                indexes.Add((x, y, offset));
+                offset += (2 + CbCrCompressCoef * CbCrCompressCoef) * DCTSize * DCTSize;
             }
+
+            var allQuantizedBytes = HuffmanCodec.Decode(image.CompressedBytes, image.DecodeTable, image.BitsCount);
+
+            Parallel.ForEach(indexes, () => new UncompressStructures(ySize, DCTSize), (index, state, s) =>
+            {
+                var ys = ySize;
+                var aqb = allQuantizedBytes;
+                UncompressYCbCrBlock(ys, aqb, s.QuantizedBytes, s.QuantizedFreqs, s.ChannelFreqs,
+                    s.YChannel, s.CbcrChannels, s.extendedcbcrChannels, result, index.y, index.x, index.offset);
+                return s;
+            }, f => { });
 
 			return result;
 		}

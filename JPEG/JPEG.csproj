@@ -4,7 +4,6 @@
         <OutputType>Exe</OutputType>
         <TargetFrameworks>net472;netcoreapp2.2</TargetFrameworks>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-      
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net472|AnyCPU'">
