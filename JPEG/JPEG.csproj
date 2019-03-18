@@ -4,10 +4,12 @@
         <OutputType>Exe</OutputType>
         <TargetFrameworks>net472;netcoreapp2.2</TargetFrameworks>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <Optimize>true</Optimize>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net472|AnyCPU'">
       <DefineConstants>TRACE</DefineConstants>
+      <Optimize>true</Optimize>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Benchmarks|net472|AnyCPU'">

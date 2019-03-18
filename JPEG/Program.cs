@@ -130,14 +130,14 @@ namespace JPEG
 
             }, f => { });
 
-            var compressedBytes = HuffmanCodec.Encode(allQuantizedBytes, out var decodeTable, out var bitsCount);
+            var compressedBytes = HuffmanCodec.Encode(allQuantizedBytes);
 
             return new CompressedImage
             {
                 Quality = quality,
                 CompressedBytes = compressedBytes,
-                BitsCount = bitsCount,
-                DecodeTable = decodeTable,
+                //BitsCount = bitsCount,
+                //DecodeTable = decodeTable,
                 Height = matrix.Height,
                 Width = matrix.Width
             };
@@ -197,7 +197,7 @@ namespace JPEG
                 offset += (2 + CbCrCompressCoef * CbCrCompressCoef) * DCTSize * DCTSize;
             }
 
-            var allQuantizedBytes = HuffmanCodec.Decode(image.CompressedBytes, image.DecodeTable, image.BitsCount);
+            var allQuantizedBytes = HuffmanCodec.Decode(image.CompressedBytes);
 
             Parallel.ForEach(indexes, () => new UncompressStructures(ySize, DCTSize), (index, state, s) =>
             {
