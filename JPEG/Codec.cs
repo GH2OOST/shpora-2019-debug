@@ -3,7 +3,7 @@ using System.IO.Compression;
 
 namespace JPEG
 {
-	class HuffmanCodec
+	class Codec
 	{
         public static byte[] Encode(byte[] data)
         {
