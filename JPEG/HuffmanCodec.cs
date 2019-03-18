@@ -15,9 +15,11 @@ namespace JPEG
         {
             var another = (HuffmanNode)obj;
             var comp = Frequency.CompareTo(another.Frequency);
+            if (comp != 0)
+                return comp;
             if (LeafLabel == null || another.LeafLabel == null)
                 return -1;
-            return comp != 0 ? comp : LeafLabel.Value.CompareTo(another.LeafLabel.Value);
+            return LeafLabel.Value.CompareTo(another.LeafLabel.Value);
         }
     }
 
