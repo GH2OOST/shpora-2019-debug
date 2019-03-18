@@ -7,12 +7,12 @@
         public double[,] SubMatrix;
         public byte[,] QuantizedFreqs;
 
-        public CompressStructures()
+        public CompressStructures(int size)
         {
-            ChannelFreqs = new double[Program.DCTSize, Program.DCTSize];
-            SubMatrix = new double[Program.DCTSize, Program.DCTSize];
-            QuantizedFreqs = new byte[Program.DCTSize, Program.DCTSize];
-            QuantizedBytes = new byte[Program.DCTSize * Program.DCTSize];
+            ChannelFreqs = new double[size, size];
+            SubMatrix = new double[size, size];
+            QuantizedFreqs = new byte[size, size];
+            QuantizedBytes = new byte[size * size];
         }
     }
 }

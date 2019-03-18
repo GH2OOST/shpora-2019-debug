@@ -7,7 +7,6 @@ namespace JPEG.Images
 {
     public class Matrix
     {
-        private const int Coef = Program.DCTCbCrSize / Program.DCTSize;
         private Pixel[,] Pixels; // лучше сделать private и индексатор чтобы был нормальный доступ
         public readonly int Height;
         public readonly int Width;
@@ -44,18 +43,26 @@ namespace JPEG.Images
         }
 
         public void GetSubMatrixAndCompress(int yOffset, int yLength, int xOffset, int xLength,
-            Func<Pixel, byte> componentSelector, double[,] output)
+            Func<Pixel, byte> componentSelector, double[,] output, int coef)
         {
+            var squareCoef = coef * coef;
             var tempSum = 0d;
-            for (var y = 0; y < yLength; y += Coef)
-            for (var x = 0; x < xLength; x += Coef)
+            for (var y = 0; y < yLength; y += coef)
+            for (var x = 0; x < xLength; x += coef)
             {
-                for (var yy = 0; yy < Coef; yy++)
-                for (var xx = 0; xx < Coef; xx++)
+                for (var yy = 0; yy < coef; yy++)
+                for (var xx = 0; xx < coef; xx++)
                     tempSum += componentSelector(this[yOffset + y + yy, xOffset + x + xx]);
-                output[y / Coef, x / Coef] = tempSum / (Coef * Coef);
+                output[y / coef, x / coef] = tempSum / squareCoef;
                 tempSum = 0;
             }
+        }
+
+        public void SetPixels(double[,] a, double[,] b, double[,] c, PixelFormat format, int yOffset, int xOffset)
+        {
+            for (var y = 0; y < a.GetLength(0); y++)
+            for (var x = 0; x < a.GetLength(1); x++)
+                this[yOffset + y, xOffset + x] = new Pixel(a[y, x], b[y, x], c[y, x], format);
         }
 
         private static unsafe void GetPixels(Bitmap b, Matrix matrix)
