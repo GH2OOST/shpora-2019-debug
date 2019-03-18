@@ -17,7 +17,7 @@ namespace JPEG
 	{
 		const int CompressionQuality = 70;
         public const int DCTSize = 8;
-        public const int DCTCbCrSize = 16;
+        public const int DCTCbCrSize = 8;
         public const int CbCrCompressCoef = DCTCbCrSize / DCTSize;
 
         static void Main(string[] args)
@@ -77,12 +77,12 @@ namespace JPEG
         {
             var mSize = DCTSize * DCTSize;
             for (var yy = y; yy < y + DCTCbCrSize; yy += DCTSize)
-                for (var xx = x; xx < x + DCTCbCrSize; xx += DCTSize)
-                {
-                    matrix.GetSubMatrix(yy, DCTSize, xx, DCTSize, ToY, subMatrix);
-                    CompressBlock(subMatrix, channelFreqs, quantizedFreqs, quantizedBytes, allQuantizedBytes, offset);
-                    offset += mSize;
-                }
+            for (var xx = x; xx < x + DCTCbCrSize; xx += DCTSize)
+            {
+                matrix.GetSubMatrix(yy, DCTSize, xx, DCTSize, ToY, subMatrix);
+                CompressBlock(subMatrix, channelFreqs, quantizedFreqs, quantizedBytes, allQuantizedBytes, offset);
+                offset += mSize;
+            }
 
             foreach (var selector in selectorFuncs)
             {
@@ -110,13 +110,13 @@ namespace JPEG
             var offset = 0;
 
             var indexes =
-                new List<(int x, int y, int offset)>(matrix.Height / DCTCbCrSize + matrix.Width / DCTCbCrSize);
+                new List<(int x, int y, int offset)>(matrix.Height / DCTCbCrSize * (matrix.Width / DCTCbCrSize));
             for (var y = 0; y < matrix.Height; y += DCTCbCrSize)
-                for (var x = 0; x < matrix.Width; x += DCTCbCrSize)
-                {
-                    indexes.Add((x, y, offset));
-                    offset += 6 * DCTSize * DCTSize;
-                }
+            for (var x = 0; x < matrix.Width; x += DCTCbCrSize)
+            {
+                indexes.Add((x, y, offset));
+                offset += (2 + CbCrCompressCoef * CbCrCompressCoef) * DCTSize * DCTSize;
+            }
 
             Quantizers.Init(quality);
             var selectorFuncs = new Func<Pixel, byte>[] { p => p.Cb, p => p.Cr };

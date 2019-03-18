@@ -3,8 +3,8 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFrameworks>net472;netcoreapp2.2</TargetFrameworks>
-        <Configurations>Debug;Release;Benchmarks</Configurations>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+      
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net472|AnyCPU'">
