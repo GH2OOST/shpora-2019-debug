@@ -33,6 +33,7 @@ namespace WinDbg.Demo.Leak
                 
                 eventProducer.Event += (sender, eventArgs) => Console.WriteLine($"{eventArgs} {buffer.Length}");
                 
+               // GC.Collect(2);
                 Thread.Sleep(1000);
             }
         }

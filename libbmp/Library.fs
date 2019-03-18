@@ -22,7 +22,7 @@ module imageprocessor =
             i <- step i
             done
 
-    let private count<'t> (a: IList<'t>) = a.LongCount () |> int32
+    let private count<'t> (a: IList<'t>) = a.Count |> int32
 
     let inline private arrayloop<'t> (array: IList<'t>) (func : int32 -> _) =
         forloop

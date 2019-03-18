@@ -15,6 +15,7 @@ namespace ClrMD
             var objects = Objects.CreateObjects();
 
             PrintObjectsWithClrMD();
+            Console.ReadKey();
             
             GC.KeepAlive(objects);
         }

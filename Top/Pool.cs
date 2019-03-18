@@ -23,7 +23,7 @@ namespace Top
         public Disposable<T> Acquire()
         {
             lock (sync)
-                return new Disposable<T>(items.Count < 0 ? items.Pop() : poolConfig.CreateInstance(), Release);
+                return new Disposable<T>(items.Count > 0 ? items.Pop() : poolConfig.CreateInstance(), Release);
         }    
     }
 }
