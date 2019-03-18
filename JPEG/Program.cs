@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Running;
 using JPEG.Benchmarks;
@@ -15,8 +16,9 @@ namespace JPEG
 	class Program
 	{
 		const int CompressionQuality = 70;
-        public const int DCTYSize = 8;
+        public const int DCTSize = 8;
         public const int DCTCbCrSize = 16;
+        public const int CbCrCompressCoef = DCTCbCrSize / DCTSize;
 
         static void Main(string[] args)
 		{
@@ -69,63 +71,95 @@ namespace JPEG
 
         private static byte ToY(Pixel p) => p.Y;
 
-        private static CompressedImage Compress(Matrix matrix, int quality = 50)
-		{
-			var allQuantizedBytes = new List<byte>();
-            //Func<Pixel, double> ySelector = p => p.Y;
-            var selectorFuncs = new Func<Pixel, byte>[] { p => p.Cb, p => p.Cr };
-            var quantizationMatrix = GetQuantizationMatrix(quality);
-            var channelFreqs = new double[DCTYSize, DCTYSize];
-            var subMatrix = new double[DCTYSize, DCTYSize];
-            var quantizedFreqs = new byte[DCTYSize, DCTYSize];
-            var quantizedBytes = new byte[DCTYSize * DCTYSize];
+        private static void CompressYCbCrBlock(Matrix matrix, int x, int y, double[,] subMatrix, double[,] channelFreqs,
+            byte[,] quantizedFreqs, byte[] quantizedBytes, byte[] allQuantizedBytes,
+            Func<Pixel, byte>[] selectorFuncs, int offset, int[,] qm)
+        {
+            var mSize = DCTSize * DCTSize;
+            for (var yy = y; yy < y + DCTCbCrSize; yy += DCTSize)
+                for (var xx = x; xx < x + DCTCbCrSize; xx += DCTSize)
+                {
+                    matrix.GetSubMatrix(yy, DCTSize, xx, DCTSize, ToY, subMatrix);
+                    CompressBlock(subMatrix, channelFreqs, quantizedFreqs, quantizedBytes, allQuantizedBytes, offset, qm);
+                    offset += mSize;
+                }
 
-            for (var y = 0; y < matrix.Height; y += DCTCbCrSize)
-            for (var x = 0; x < matrix.Width; x += DCTCbCrSize)
+            foreach (var selector in selectorFuncs)
             {
-                for (var yy = y; yy < y + DCTCbCrSize; yy += DCTYSize)
-                for (var xx = x; xx < x + DCTCbCrSize; xx += DCTYSize)
+                matrix.GetSubMatrixAndCompress(y, DCTCbCrSize, x, DCTCbCrSize,
+                    selector, subMatrix);
+                CompressBlock(subMatrix, channelFreqs, quantizedFreqs, quantizedBytes, allQuantizedBytes, offset, qm);
+                offset += mSize;
+            }
+        }
+
+        private static void CompressBlock(double[,] subMatrix, double[,] channelFreqs,
+            byte[,] quantizedFreqs, byte[] quantizedBytes, byte[] allQuantizedBytes, int offset, int[,] quantizationMatrix)
+        {
+            ShiftMatrixValues(subMatrix , - 128);
+            DCT.DCT2D(subMatrix, channelFreqs);
+            Quantize(channelFreqs, quantizationMatrix, quantizedFreqs);
+            ZigZagScan(quantizedFreqs, quantizedBytes);
+            Buffer.BlockCopy(quantizedBytes, 0, allQuantizedBytes, offset, DCTSize * DCTSize);
+        }
+
+        private static CompressedImage Compress(Matrix matrix, int quality = 50)
+        {
+            var size = matrix.Height * matrix.Width;
+            var allQuantizedBytes = new byte[size + 2 * size / (CbCrCompressCoef * CbCrCompressCoef)];
+            var offset = 0;
+
+            var indexes =
+                new List<(int x, int y, int offset)>(matrix.Height / DCTCbCrSize + matrix.Width / DCTCbCrSize);
+            for (var y = 0; y < matrix.Height; y += DCTCbCrSize)
+                for (var x = 0; x < matrix.Width; x += DCTCbCrSize)
                 {
-                    matrix.GetSubMatrix(yy, DCTYSize, xx, DCTYSize, ToY, subMatrix);
-                    ShiftMatrixValues(subMatrix, -128);
-                    DCT.DCT2D(subMatrix, channelFreqs);
-                    Quantize(channelFreqs, quantizationMatrix, quantizedFreqs);
-                    ZigZagScan(quantizedFreqs, quantizedBytes);
-                    allQuantizedBytes.AddRange(quantizedBytes);
+                    indexes.Add((x, y, offset));
+                    offset += 6 * DCTSize * DCTSize;
                 }
 
-                foreach (var selector in selectorFuncs)
-                {
-                    matrix.GetSubMatrixAndCompress(y, DCTCbCrSize, x, DCTCbCrSize, selector, subMatrix);
-                    ShiftMatrixValues(subMatrix, -128);
-                    DCT.DCT2D(subMatrix, channelFreqs);
-                    Quantize(channelFreqs, quantizationMatrix, quantizedFreqs);
-                    ZigZagScan(quantizedFreqs, quantizedBytes);
-                    allQuantizedBytes.AddRange(quantizedBytes);
-                }
-            }
+            var quantizationMatrix = GetQuantizationMatrix(quality);
+            var selectorFuncs = new Func<Pixel, byte>[] { p => p.Cb, p => p.Cr };
+
+            Parallel.ForEach(indexes, () => new CompressStructures(), (index, state, s) =>
+            {
+                var sf = selectorFuncs;
+                var qm = quantizationMatrix;
+                CompressYCbCrBlock(matrix, index.x, index.y, s.SubMatrix, s.ChannelFreqs, s.QuantizedFreqs,
+                    s.QuantizedBytes, allQuantizedBytes, sf, index.offset, qm);
+                return s;
+
+            }, f => { });
 
             var compressedBytes = HuffmanCodec.Encode(allQuantizedBytes, out var decodeTable, out var bitsCount);
 
-			return new CompressedImage {Quality = quality, CompressedBytes = compressedBytes, BitsCount = bitsCount, DecodeTable = decodeTable, Height = matrix.Height, Width = matrix.Width};
-		}
-		
-		private static Matrix Uncompress(CompressedImage image)
+            return new CompressedImage
+            {
+                Quality = quality,
+                CompressedBytes = compressedBytes,
+                BitsCount = bitsCount,
+                DecodeTable = decodeTable,
+                Height = matrix.Height,
+                Width = matrix.Width
+            };
+        }
+
+        private static Matrix Uncompress(CompressedImage image)
         {
-            const int ySize = DCTCbCrSize * DCTCbCrSize / (DCTYSize * DCTYSize);
+            const int ySize = DCTCbCrSize * DCTCbCrSize / (DCTSize * DCTSize);
 			var result = new Matrix(image.Height, image.Width);
             var _y = new double[ySize][,];
             for (var i = 0; i < ySize; i++)
-                _y[i] = new double[DCTYSize, DCTYSize];
-            var cb = new double[DCTYSize, DCTYSize];
-            var cr = new double[DCTYSize, DCTYSize];
-            var extendedcb = new double[DCTYSize, DCTYSize];
-            var extendedcr = new double[DCTYSize, DCTYSize];
+                _y[i] = new double[DCTSize, DCTSize];
+            var cb = new double[DCTSize, DCTSize];
+            var cr = new double[DCTSize, DCTSize];
+            var extendedcb = new double[DCTSize, DCTSize];
+            var extendedcr = new double[DCTSize, DCTSize];
             var channels = new[] { cb, cr };
-            var quantizedBytes = new byte[DCTYSize * DCTYSize];
+            var quantizedBytes = new byte[DCTSize * DCTSize];
             var quantizationMatrix = GetQuantizationMatrix(image.Quality);
-            var quantizedFreqs = new byte[DCTYSize, DCTYSize];
-            var channelFreqs = new double[DCTYSize, DCTYSize];
+            var quantizedFreqs = new byte[DCTSize, DCTSize];
+            var channelFreqs = new double[DCTSize, DCTSize];
 
             using (var allQuantizedBytes =
 				new MemoryStream(HuffmanCodec.Decode(image.CompressedBytes, image.DecodeTable, image.BitsCount)))
@@ -152,12 +186,12 @@ namespace JPEG
                     }
 
                     var j = 0;
-                    for (var yy = 0; yy < DCTCbCrSize / DCTYSize; yy++)
-                    for (var xx = 0; xx < DCTCbCrSize / DCTYSize; xx++)
+                    for (var yy = 0; yy < DCTCbCrSize / DCTSize; yy++)
+                    for (var xx = 0; xx < DCTCbCrSize / DCTSize; xx++)
                     {
                         ExtendMatrix(cb, xx, yy, extendedcb);
                         ExtendMatrix(cr, xx, yy, extendedcr);
-                        SetPixels(result, _y[j], extendedcb, extendedcr, PixelFormat.YCbCr, y + yy * DCTYSize, x + xx *DCTYSize);
+                        SetPixels(result, _y[j], extendedcb, extendedcr, PixelFormat.YCbCr, y + yy * DCTSize, x + xx *DCTSize);
                         j++;
                     }
                 }
@@ -168,13 +202,13 @@ namespace JPEG
 
         private static void ExtendMatrix(double[,] matrix, int xOffset, int yOffset, double[,] output)
         {
-            var coef = DCTCbCrSize / DCTYSize;
-            var shiftSize = DCTYSize / coef;
+            var coef = DCTCbCrSize / DCTSize;
+            var shiftSize = DCTSize / coef;
             xOffset *= shiftSize;
             yOffset *= shiftSize;
 
-            for (var y = 0; y < DCTYSize; y++)
-            for (var x = 0; x < DCTYSize; x++)
+            for (var y = 0; y < DCTSize; y++)
+            for (var x = 0; x < DCTSize; x++)
                 output[y, x] = matrix[(yOffset + y) / coef, (xOffset + x) / coef];
         }
 

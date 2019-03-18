@@ -5,7 +5,7 @@ namespace JPEG
 	public class DCT
 	{
         private static readonly double OneDivideSqrt2 = 1 / Math.Sqrt(2);
-        private static readonly double[,] BasisFunctionCache = new double[Program.DCTYSize, Program.DCTYSize];
+        private static readonly double[,] BasisFunctionCache = new double[Program.DCTSize, Program.DCTSize];
         //private static readonly HashSet<int> Dimensions = new HashSet<int>();
 
         static DCT()
@@ -17,7 +17,7 @@ namespace JPEG
         {
             for (var y = 0; y < BasisFunctionCache.GetLength(0); y++)
             for (var x = 0; x < BasisFunctionCache.GetLength(1); x++)
-                BasisFunctionCache[y, x] = Math.Cos((2d * y + 1d) * x * Math.PI / (2 * Program.DCTYSize));
+                BasisFunctionCache[y, x] = Math.Cos((2d * y + 1d) * x * Math.PI / (2 * Program.DCTSize));
         }
 
         public static void DCT2D(double[,] input, double[,] output)

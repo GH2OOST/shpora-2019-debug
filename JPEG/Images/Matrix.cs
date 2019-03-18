@@ -7,7 +7,7 @@ namespace JPEG.Images
 {
     public class Matrix
     {
-        private const int Coef = Program.DCTCbCrSize / Program.DCTYSize;
+        private const int Coef = Program.DCTCbCrSize / Program.DCTSize;
         private Pixel[,] Pixels; // лучше сделать private и индексатор чтобы был нормальный доступ
         public readonly int Height;
         public readonly int Width;
