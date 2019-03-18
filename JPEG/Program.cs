@@ -17,7 +17,7 @@ namespace JPEG
 	{
 		const int CompressionQuality = 70;
         public const int DCTSize = 8;
-        public const int DCTCbCrSize = 8;
+        public const int DCTCbCrSize = 16;
         public const int CbCrCompressCoef = DCTCbCrSize / DCTSize;
 
         static void Main(string[] args)
