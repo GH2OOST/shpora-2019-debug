@@ -136,8 +136,6 @@ namespace JPEG
             {
                 Quality = quality,
                 CompressedBytes = compressedBytes,
-                //BitsCount = bitsCount,
-                //DecodeTable = decodeTable,
                 Height = matrix.Height,
                 Width = matrix.Width
             };

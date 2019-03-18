@@ -6,7 +6,6 @@ namespace JPEG
 	{
         private static readonly double OneDivideSqrt2 = 1 / Math.Sqrt(2);
         private static readonly double[,] BasisFunctionCache = new double[Program.DCTSize, Program.DCTSize];
-        //private static readonly HashSet<int> Dimensions = new HashSet<int>();
 
         static DCT()
         {

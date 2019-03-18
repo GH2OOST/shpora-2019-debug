@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Drawing;
 using System.Drawing.Imaging;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace JPEG.Images
 {
@@ -11,19 +10,14 @@ namespace JPEG.Images
         public readonly int Height;
         public readonly int Width;
         public double ShiftSize { get; set; }
-        //private readonly int yOffset;
-        //private readonly int xOffset;
         public Func<Pixel, double> SelectorFunc { get; set; }
 
         public Matrix(int height, int width)
-        {
-            //Matrix(height, width, 0, 0, new Pixel[height, width], 0);
+        { 
             SelectorFunc = pixel => pixel.Y;
             ShiftSize = 0;
             Height = height;
             Width = width;
-            //yOffset = 0;
-            //xOffset = 0;
             Pixels = new Pixel[height, width];
         }
 
