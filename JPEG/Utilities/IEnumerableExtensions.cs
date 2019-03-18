@@ -7,9 +7,9 @@ namespace JPEG.Utilities
 	static class IEnumerableExtensions
 	{
 		public static T MinOrDefault<T>(this IEnumerable<T> enumerable, Func<T, int> selector)
-		{
-			return enumerable.OrderBy(selector).FirstOrDefault();
-		}
+        {
+            return enumerable.OrderBy(selector).FirstOrDefault();
+        }
 
 		public static IEnumerable<T> Without<T>(this IEnumerable<T> enumerable, params T[] elements)
 		{

@@ -3,9 +3,21 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFrameworks>net472;netcoreapp2.2</TargetFrameworks>
+        <Configurations>Debug;Release;Benchmarks</Configurations>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net472|AnyCPU'">
+      <DefineConstants>TRACE</DefineConstants>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Benchmarks|net472|AnyCPU'">
+      <Optimize>true</Optimize>
+      <DefineConstants>TRACE;bench</DefineConstants>
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="BenchmarkDotNet" Version="0.11.4" />
       <PackageReference Include="System.Drawing.Common" Version="4.5.1" />
     </ItemGroup>
 

@@ -1,63 +1,78 @@
 ﻿using System;
-using JPEG.Utilities;
 
 namespace JPEG
 {
 	public class DCT
 	{
-		public static double[,] DCT2D(double[,] input)
+        private static readonly double OneDivideSqrt2 = 1 / Math.Sqrt(2);
+        private static readonly double[,] BasisFunctionCache = new double[Program.DCTYSize, Program.DCTYSize];
+        //private static readonly HashSet<int> Dimensions = new HashSet<int>();
+
+        static DCT()
+        {
+            FillCache();
+        }
+
+        private static void FillCache()
+        {
+            for (var y = 0; y < BasisFunctionCache.GetLength(0); y++)
+            for (var x = 0; x < BasisFunctionCache.GetLength(1); x++)
+                BasisFunctionCache[y, x] = Math.Cos((2d * y + 1d) * x * Math.PI / (2 * Program.DCTYSize));
+        }
+
+        public static void DCT2D(double[,] input, double[,] output)
 		{
 			var height = input.GetLength(0);
 			var width = input.GetLength(1);
-			var coeffs = new double[width, height];
+                
+            var beta = Beta(height, width);
 
-			MathEx.LoopByTwoVariables(
-				0, width,
-				0, height,
-				(u, v) =>
-				{
-					var sum = MathEx
-						.SumByTwoVariables(
-							0, width,
-							0, height,
-							(x, y) => BasisFunction(input[x, y], u, v, x, y, height, width));
-
-					coeffs[u, v] = sum * Beta(height, width) * Alpha(u) * Alpha(v);
-				});
-			
-			return coeffs;
+            for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+            {
+                var sum = 0d;
+                for (var sumY = 0; sumY < height; sumY++)
+                for (var sumX = 0; sumX < width; sumX++)
+                    sum += BasisFunction(input[sumY, sumX], x, y, sumX, sumY);
+                output[y, x] = sum * beta * Alpha(x) * Alpha(y);
+            }
 		}
 
-		public static void IDCT2D(double[,] coeffs, double[,] output)
+		public static void IDCT2D(double[,] input, double[,] output)
 		{
-			for(var x = 0; x < coeffs.GetLength(1); x++)
-			{
-				for(var y = 0; y < coeffs.GetLength(0); y++)
-				{
-					var sum = MathEx
-						.SumByTwoVariables(
-							0, coeffs.GetLength(1),
-							0, coeffs.GetLength(0),
-							(u, v) => BasisFunction(coeffs[u, v], u, v, x, y, coeffs.GetLength(0), coeffs.GetLength(1)) * Alpha(u) * Alpha(v));
+            var height = input.GetLength(0);
+            var width = input.GetLength(1);
 
-					output[x, y] = sum * Beta(coeffs.GetLength(0), coeffs.GetLength(1));
-				}
-			}
-		}
+            var beta = Beta(height, width);
 
-		public static double BasisFunction(double a, double u, double v, double x, double y, int height, int width)
-		{
-			var b = Math.Cos(((2d * x + 1d) * u * Math.PI) / (2 * width));
-			var c = Math.Cos(((2d * y + 1d) * v * Math.PI) / (2 * height));
+            for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+            {
+                var sum = 0d;
+                for (var sumY = 0; sumY < height; sumY++)
+                for (var sumX = 0; sumX < width; sumX++)
+                    sum += BasisFunction(input[sumY, sumX], sumX, sumY, x, y) * Alpha(sumX) * Alpha(sumY);
+                output[y, x] = sum * beta;
+            }
+        }
 
-			return a * b * c;
-		}
+        public static double BasisFunction(double a, double sumX, double sumY, double x, double y)
+        {
+            var b = CosFunc((int) sumX, (int) x);
+            var c = CosFunc((int) sumY, (int) y);
 
-		private static double Alpha(int u)
-		{
-			if(u == 0)
-				return 1 / Math.Sqrt(2);
-			return 1;
+            return a * b * c;
+        }
+
+        private static double CosFunc(int u, int x) => 
+            BasisFunctionCache[x, u];
+
+        private static double Alpha(int u)
+        {
+            if (u == 0)
+                return OneDivideSqrt2;
+
+            return 1;
 		}
 
 		private static double Beta(int height, int width)

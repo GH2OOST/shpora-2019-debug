@@ -20,9 +20,7 @@ namespace JPEG
 		{
 			using(var sw = new FileStream(path, FileMode.Create))
 			{
-				byte[] buffer;
-
-				buffer = BitConverter.GetBytes(Width);
+                var buffer = BitConverter.GetBytes(Width);
 				sw.Write(buffer, 0, buffer.Length);
 
 				buffer = BitConverter.GetBytes(Height);
@@ -63,7 +61,7 @@ namespace JPEG
 			var result = new CompressedImage();
 			using(var sr = new FileStream(path, FileMode.Open))
 			{
-				byte[] buffer = new byte[8];
+				var buffer = new byte[8];
 
 				sr.Read(buffer, 0, 4);
 				result.Width = BitConverter.ToInt32(buffer, 0);
@@ -78,7 +76,7 @@ namespace JPEG
 				var decodeTableSize = BitConverter.ToInt32(buffer, 0);
 				result.DecodeTable = new Dictionary<BitsWithLength, byte>(decodeTableSize, new BitsWithLength.Comparer());
 
-				for(int i = 0; i < decodeTableSize; i++)
+				for(var i = 0; i < decodeTableSize; i++)
 				{
 					sr.Read(buffer, 0, 4);
 					var bits = BitConverter.ToInt32(buffer, 0);
