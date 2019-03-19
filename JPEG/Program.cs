@@ -108,16 +108,7 @@ namespace JPEG
             var size = matrix.Height * matrix.Width;
             var allQuantizedBytes = new byte[size + 2 * size / (CbCrCompressCoef * CbCrCompressCoef)];
 
-            var offset = 0;
-            var indexes =
-                new List<(int x, int y, int offset)>(matrix.Height / DCTCbCrSize * (matrix.Width / DCTCbCrSize));
-            for (var y = 0; y < matrix.Height; y += DCTCbCrSize)
-            for (var x = 0; x < matrix.Width; x += DCTCbCrSize)
-            {
-                indexes.Add((x, y, offset));
-                offset += (2 + CbCrCompressCoef * CbCrCompressCoef) * DCTSize * DCTSize;
-            }
-
+            var indexes = GetIndexes(matrix.Height, matrix.Width);
             Quantizers.Init(quality);
             var selectorFuncs = new Func<Pixel, byte>[] { p => p.Cb, p => p.Cr };
 
@@ -131,7 +122,6 @@ namespace JPEG
             }, f => { });
 
             var compressedBytes = Codec.Encode(allQuantizedBytes);
-
             return new CompressedImage
             {
                 Quality = quality,
@@ -168,8 +158,8 @@ namespace JPEG
             }
 
             var j = 0;
-            for (var yy = 0; yy < DCTCbCrSize / DCTSize; yy++)
-            for (var xx = 0; xx < DCTCbCrSize / DCTSize; xx++)
+            for (var yy = 0; yy < CbCrCompressCoef; yy++)
+            for (var xx = 0; xx < CbCrCompressCoef; xx++)
             {
                 for (var i = 0; i < 2; i++)
                     cbcrChannels[i].ExtendMatrix(xx, yy, CbCrCompressCoef, DCTSize, extendedcbcrChannels[i]);
@@ -184,17 +174,7 @@ namespace JPEG
 			var result = new Matrix(image.Height, image.Width);
             
             Quantizers.Init(image.Quality);
-
-            var offset = 0;
-            var indexes =
-                new List<(int x, int y, int offset)>(image.Height / DCTCbCrSize * (image.Width / DCTCbCrSize));
-            for (var y = 0; y < image.Height; y += DCTCbCrSize)
-            for (var x = 0; x < image.Width; x += DCTCbCrSize)
-            {
-                indexes.Add((x, y, offset));
-                offset += (2 + CbCrCompressCoef * CbCrCompressCoef) * DCTSize * DCTSize;
-            }
-
+            var indexes = GetIndexes(image.Height, image.Width);
             var allQuantizedBytes = Codec.Decode(image.CompressedBytes);
 
             Parallel.ForEach(indexes, () => new UncompressStructures(ySize, DCTSize), (index, state, s) =>
@@ -208,5 +188,20 @@ namespace JPEG
 
 			return result;
 		}
-	}
+
+        private static List<(int x, int y, int offset)> GetIndexes(int height, int width)
+        {
+            var offset = 0;
+            var indexes =
+                new List<(int x, int y, int offset)>(height / DCTCbCrSize * (width / DCTCbCrSize));
+            for (var y = 0; y < height; y += DCTCbCrSize)
+            for (var x = 0; x < width; x += DCTCbCrSize)
+            {
+                indexes.Add((x, y, offset));
+                offset += (2 + CbCrCompressCoef * CbCrCompressCoef) * DCTSize * DCTSize;
+            }
+
+            return indexes;
+        }
+    }
 }

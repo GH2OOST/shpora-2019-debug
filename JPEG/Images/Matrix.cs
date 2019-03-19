@@ -61,9 +61,9 @@ namespace JPEG.Images
 
         private static unsafe void GetPixels(Bitmap b, Matrix matrix)
         {
-            var bData = b.LockBits(new Rectangle(0, 0, matrix.Width, matrix.Height), ImageLockMode.ReadWrite, b.PixelFormat);
+            var bData = b.LockBits(new Rectangle(0, 0, matrix.Width, matrix.Height), ImageLockMode.ReadOnly, b.PixelFormat);
 
-            var scan0 = (byte*)bData.Scan0.ToPointer();
+            var scan0 = (byte*) bData.Scan0;
 
             for (var y = 0; y < bData.Height; ++y)
             for (var x = 0; x < bData.Width; ++x)
@@ -77,9 +77,9 @@ namespace JPEG.Images
 
         private static unsafe void SetPixels(Bitmap b, Matrix matrix)
         {
-            var bData = b.LockBits(new Rectangle(0, 0, b.Width, b.Height), ImageLockMode.ReadWrite, b.PixelFormat);
+            var bData = b.LockBits(new Rectangle(0, 0, b.Width, b.Height), ImageLockMode.WriteOnly, b.PixelFormat);
 
-            var scan0 = (byte*)bData.Scan0.ToPointer();
+            var scan0 = (byte*)bData.Scan0;
 
             for (var y = 0; y < bData.Height; ++y)
             for (var x = 0; x < bData.Width; ++x)
